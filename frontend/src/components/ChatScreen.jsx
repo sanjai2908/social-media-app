@@ -4,9 +4,10 @@ import api from "../api/axiosInstance";
 import { useAuth } from "../context/AuthContext";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000", {
+const socket = io("https://social-media-app-fh18.onrender.com", {
   autoConnect: true,
 });
+
 
 const ChatScreen = ({ selectedChat }) => {
   const { user } = useAuth();
