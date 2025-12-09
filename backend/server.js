@@ -18,10 +18,10 @@ connectDB();
 const app = express();
 const httpServer = createServer(app);
 
-// ------------ SOCKET.IO --------------
+// ------------------ SOCKET.IO --------------------
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || "*",
+    origin: "*", // Allow all for now (you will tighten later)
     methods: ["GET", "POST"],
   },
 });
@@ -29,32 +29,43 @@ const io = new Server(httpServer, {
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
-  // Join specific user room
+  // Join user's private room
   socket.on("join", (userId) => {
     socket.join(userId);
   });
 
-  // Send and receive messages
-  socket.on("sendMessage", async ({ from, to, content }) => {
+  // Send chat messages
+  socket.on("sendMessage", async ({ from, to, content, chatId }) => {
     try {
       let chat = await Chat.findOne({
         users: { $all: [from, to] },
       });
 
+      // Create chat if not exist
       if (!chat) {
         chat = await Chat.create({ users: [from, to], messages: [] });
       }
 
+      // Add message to DB
       const message = { sender: from, content };
       chat.messages.push(message);
       await chat.save();
 
-      // Send real-time message to both users
-      io.to(to).emit("receiveMessage", { from, content, chatId: chat._id });
-      io.to(from).emit("receiveMessage", { from, content, chatId: chat._id });
+      // Emit to both users
+      io.to(to).emit("receiveMessage", {
+        from,
+        content,
+        chatId: chat._id,
+      });
 
-    } catch (err) {
-      console.error("Socket sendMessage error:", err);
+      io.to(from).emit("receiveMessage", {
+        from,
+        content,
+        chatId: chat._id,
+      });
+
+    } catch (error) {
+      console.error("sendMessage error:", error);
     }
   });
 
@@ -63,15 +74,13 @@ io.on("connection", (socket) => {
   });
 });
 
-// ------------ EXPRESS CONFIG --------------
-
+// ------------------ EXPRESS CONFIG --------------------
 app.use(cors());
 app.use(express.json());
 
+// Static Uploads
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Serve uploaded images
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Routes
@@ -81,6 +90,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/chats", chatRoutes);
 
+// ------------------ START SERVER --------------------
 const PORT = process.env.PORT || 5000;
 
 httpServer.listen(PORT, () => {
