@@ -4,8 +4,8 @@ import api from "../api/axiosInstance";
 import { useAuth } from "../context/AuthContext";
 import { io } from "socket.io-client";
 
-// SOCKET FIX: USE BACKEND URL
-const socket = io("https://YOUR-BACKEND-RENDER-LINK", {
+// 🔥 FIXED SOCKET CONNECTION
+const socket = io("https://social-media-app-fh18.onrender.com", {
   transports: ["websocket"],
   withCredentials: true,
 });
@@ -17,19 +17,20 @@ const ChatScreen = ({ selectedChat }) => {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
+  // Join my private socket room
   useEffect(() => {
     if (user?._id) {
       socket.emit("join", user._id);
     }
   }, [user]);
 
-  // Load chat messages
+  // Load previous chat history
   useEffect(() => {
     if (!selectedChat) return;
     setMessages(selectedChat.messages || []);
   }, [selectedChat]);
 
-  // REAL-TIME UPDATE
+  // Receive live messages
   useEffect(() => {
     const handler = ({ from, content, chatId }) => {
       if (!selectedChat) return;
@@ -42,7 +43,7 @@ const ChatScreen = ({ selectedChat }) => {
     return () => socket.off("receiveMessage", handler);
   }, [selectedChat]);
 
-  // Auto-scroll
+  // Auto scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -59,6 +60,7 @@ const ChatScreen = ({ selectedChat }) => {
 
   const otherUser = selectedChat.users.find((u) => u._id !== user._id);
 
+  // Send message
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!text.trim()) return;
@@ -86,6 +88,7 @@ const ChatScreen = ({ selectedChat }) => {
     } catch (err) {
       console.error(err);
     }
+
     setLoading(false);
   };
 
@@ -93,31 +96,34 @@ const ChatScreen = ({ selectedChat }) => {
     <Card style={{ height: "400px", display: "flex", flexDirection: "column" }}>
       <Card.Header>
         <strong>{otherUser?.name}</strong>
+        <div className="text-muted small">{otherUser?.email}</div>
       </Card.Header>
 
       <Card.Body style={{ overflowY: "auto", backgroundColor: "#f8f9fa" }}>
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className="mb-1"
-            style={{
-              display: "flex",
-              justifyContent: m.sender._id === user._id ? "flex-end" : "flex-start",
-            }}
-          >
-            <span
+        {messages.map((m, i) => {
+          const isMe = m.sender?._id === user._id;
+          return (
+            <div
+              key={i}
               style={{
-                padding: "6px 10px",
-                borderRadius: "12px",
-                backgroundColor:
-                  m.sender._id === user._id ? "#d1e7dd" : "#e2e3e5",
+                display: "flex",
+                justifyContent: isMe ? "flex-end" : "flex-start",
+                marginBottom: "6px",
               }}
             >
-              {m.content}
-            </span>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
+              <span
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "12px",
+                  backgroundColor: isMe ? "#d1e7dd" : "#e2e3e5",
+                }}
+              >
+                {m.content}
+              </span>
+            </div>
+          );
+        })}
+        <div ref={messagesEndRef}></div>
       </Card.Body>
 
       <Card.Footer>
@@ -125,10 +131,17 @@ const ChatScreen = ({ selectedChat }) => {
           <Form.Control
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Type a message"
+            placeholder="Type a message..."
           />
-          <Button type="submit" disabled={loading}>
-            {loading ? "Sending..." : "Send"}
+
+          <Button type="submit" disabled={loading || !text.trim()}>
+            {loading ? (
+              <>
+                <Spinner animation="border" size="sm" /> Sending...
+              </>
+            ) : (
+              "Send"
+            )}
           </Button>
         </Form>
       </Card.Footer>
