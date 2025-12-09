@@ -3,7 +3,10 @@ import { ListGroup } from "react-bootstrap";
 import api from "../api/axiosInstance";
 import { io } from "socket.io-client";
 
-const socket = io("https://YOUR-BACKEND-RENDER-LINK");
+// 🔥 MUST MATCH SERVER URL
+const socket = io("https://social-media-app-fh18.onrender.com", {
+  transports: ["websocket"],
+});
 
 const ChatList = ({ onSelectChat }) => {
   const [chats, setChats] = useState([]);
@@ -17,10 +20,12 @@ const ChatList = ({ onSelectChat }) => {
     fetchChats();
   }, []);
 
+  // 🔥 Auto refresh chat list on new message
   useEffect(() => {
     socket.on("receiveMessage", () => {
       fetchChats();
     });
+
     return () => socket.off("receiveMessage");
   }, []);
 
