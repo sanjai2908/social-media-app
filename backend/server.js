@@ -6,10 +6,12 @@ import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { connectDB } from "./config/db.js";
+
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import postRoutes from "./routes/postRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
+
 import Chat from "./models/chatModel.js";
 
 dotenv.config();
@@ -21,7 +23,7 @@ const httpServer = createServer(app);
 // ------------------ SOCKET.IO --------------------
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", // Allow all for now (you will tighten later)
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
@@ -34,38 +36,63 @@ io.on("connection", (socket) => {
     socket.join(userId);
   });
 
-  // Send chat messages
+  // ------------------- SEND MESSAGE --------------------
   socket.on("sendMessage", async ({ from, to, content, chatId }) => {
     try {
-      let chat = await Chat.findOne({
-        users: { $all: [from, to] },
-      });
+      // Get chat
+      let chat = await Chat.findById(chatId);
 
       // Create chat if not exist
       if (!chat) {
         chat = await Chat.create({ users: [from, to], messages: [] });
       }
 
-      // Add message to DB
-      const message = { sender: from, content };
+      // Create new message
+      const message = {
+        sender: from,
+        content,
+        seen: false,
+      };
+
       chat.messages.push(message);
       await chat.save();
 
-      // Emit to both users
-      io.to(to).emit("receiveMessage", {
-        from,
+      // Build final message format for frontend
+      const finalMessage = {
+        sender: { _id: from },
         content,
+        seen: false,
         chatId: chat._id,
-      });
+      };
 
-      io.to(from).emit("receiveMessage", {
-        from,
-        content,
-        chatId: chat._id,
-      });
+      // Emit to receiver
+      io.to(to).emit("receiveMessage", finalMessage);
+
+      // Emit to sender
+      io.to(from).emit("receiveMessage", finalMessage);
 
     } catch (error) {
       console.error("sendMessage error:", error);
+    }
+  });
+
+  // ------------------- MESSAGE SEEN --------------------
+  socket.on("messageSeen", async ({ chatId }) => {
+    try {
+      const chat = await Chat.findById(chatId);
+      if (!chat) return;
+
+      // Mark last message as seen
+      const lastMessage = chat.messages[chat.messages.length - 1];
+      lastMessage.seen = true;
+
+      await chat.save();
+
+      // Notify both users
+      const users = chat.users.map((id) => id.toString());
+      users.forEach((uid) => io.to(uid).emit("messageSeen", { chatId }));
+    } catch (err) {
+      console.error("messageSeen error:", err);
     }
   });
 
