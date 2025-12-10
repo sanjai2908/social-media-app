@@ -41,11 +41,16 @@ export const sendMessage = async (req, res) => {
       return res.status(404).json({ message: "Chat not found" });
     }
 
-    const message = { sender: req.user._id, content };
+    const message = { sender: req.user._id, content, seen: false };
     chat.messages.push(message);
     await chat.save();
-    chat = await chat.populate("messages.sender", "name profilePic");
-    res.status(201).json(chat);
+    
+    const savedMessage = chat.messages[chat.messages.length - 1];
+    
+    await chat.populate("messages.sender", "name profilePic");
+    
+    res.status(201).json(savedMessage);
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
